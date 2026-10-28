@@ -1,20 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import "./App.css";
 import logoImage from "./assets/logo.png";
 import dashboardImage from "./assets/fotodashboard.png";
 
-const initialStats = [
-  { label: "Total Analisis", value: "128", note: "+12% dari bulan lalu", icon: "◉" },
-  { label: "Pelanggan Hari Ini", value: "08", note: "3 menunggu analisis", icon: "♡" },
-  { label: "Laporan Selesai", value: "116", note: "90,6% dari total analisis", icon: "▤" },
-];
-
-const recentCustomers = [
-  { initials: "NA", name: "Nadia Aulia", date: "17 Okt 2026 · 10:24", undertone: "Warm", status: "Selesai", color: "warm" },
-  { initials: "SR", name: "Sarah Rahma", date: "17 Okt 2026 · 09:45", undertone: "Cool", status: "Selesai", color: "cool" },
-  { initials: "DP", name: "Dinda Putri", date: "17 Okt 2026 · 09:10", undertone: "Neutral", status: "Selesai", color: "neutral" },
-  { initials: "AF", name: "Alya Fitri", date: "17 Okt 2026 · 08:50", undertone: "—", status: "Menunggu", color: "pending" },
-];
+// Import data katalog langsung dari folder public
+import katalogDataRaw from "../public/katalog_produk.json";
 
 const navItems = [
   { id: "dashboard", icon: "⌂", label: "Dashboard" },
@@ -24,56 +14,79 @@ const navItems = [
 
 function App() {
   const [activePage, setActivePage] = useState("dashboard");
-  const [search, setSearch] = useState("");
-  const [currentDate, setCurrentDate] = useState("");
-  const [notifOpen, setNotifOpen] = useState(false);
+  const [katalogProduk, setKatalogProduk] = useState([]);
+  const [customerName, setCustomerName] = useState("");
   const [scanTab, setScanTab] = useState("camera");
-  const [cameraStream, setCameraStream] = useState(null);
   const [cameraError, setCameraError] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const [brightness, setBrightness] = useState(100);
+  const [contrast, setContrast] = useState(100);
+
   const [uploadedFile, setUploadedFile] = useState(null);
   const [uploadPreview, setUploadPreview] = useState(null);
-  const [uploadError, setUploadError] = useState(null);
+
+  const [historyData, setHistoryData] = useState([]);
   const [searchHistory, setSearchHistory] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [filterStatus, setFilterStatus] = useState("Semua status");
   const [selectedHistory, setSelectedHistory] = useState(null);
 
-  const historyData = [
-    { id: 1, name: "Nadia Aulia", initials: "NA", avatarColor: "#d4a5a5", dateTime: "17 Okt 2026 · 14:32", status: "Berhasil", result: "Undertone: Warm — Palet: Warm Spring", undertone: "Warm", personalColor: "Warm Spring", paletteColors: ["#F4C2A1", "#E8A87C", "#C9A27E", "#A67C52", "#FDE3C8"] },
-    { id: 2, name: "Sarah Rahma", initials: "SR", avatarColor: "#c9a9c9", dateTime: "12 Sep 2026 · 10:15", status: "Berhasil", result: "Undertone: Cool — Palet: Cool Winter", undertone: "Cool", personalColor: "Cool Winter", paletteColors: ["#E3E8F2", "#B8C4D4", "#8B9DC3", "#5A6B7E", "#F5F7FA"] },
-    { id: 3, name: "Dinda Putri", initials: "DP", avatarColor: "#b8c4d4", dateTime: "28 Agu 2026 · 16:40", status: "Berhasil", result: "Undertone: Neutral — Palet: Soft Autumn", undertone: "Neutral", personalColor: "Soft Autumn", paletteColors: ["#D4C5C5", "#B8B0A8", "#E8E0D8", "#C9B8A8", "#F2EDE0"] },
-    { id: 4, name: "Alya Fitri", initials: "AF", avatarColor: "#d4a5a5", dateTime: "21 Agu 2026 · 09:10", status: "Berhasil", result: "Undertone: Warm — Palet: Warm Spring", undertone: "Warm", personalColor: "Warm Spring", paletteColors: ["#F4C2A1", "#E8A87C", "#C9A27E", "#A67C52", "#FDE3C8"] },
-    { id: 5, name: "Rina Salsabila", initials: "RS", avatarColor: "#c9a9c9", dateTime: "15 Agu 2026 · 11:25", status: "Berhasil", result: "Undertone: Cool — Palet: Cool Winter", undertone: "Cool", personalColor: "Cool Winter", paletteColors: ["#E3E8F2", "#B8C4D4", "#8B9DC3", "#5A6B7E", "#F5F7FA"] },
-    { id: 6, name: "Fitria Anggraini", initials: "FA", avatarColor: "#b8c4d4", dateTime: "10 Agu 2026 · 15:50", status: "Gagal", result: "Tidak terdeteksi wajah — Coba lagi dengan pencahayaan lebih baik." },
-    { id: 7, name: "Salsa Nabila", initials: "SN", avatarColor: "#d4a5a5", dateTime: "3 Agu 2026 · 13:20", status: "Berhasil", result: "Undertone: Neutral — Palet: Soft Summer", undertone: "Neutral", personalColor: "Soft Summer", paletteColors: ["#D4C5C5", "#B8B0A8", "#E8E0D8", "#C9B8A8", "#F2EDE0"] },
-    { id: 8, name: "Chintya Lestari", initials: "CL", avatarColor: "#c9a9c9", dateTime: "28 Jul 2026 · 17:05", status: "Berhasil", result: "Undertone: Warm — Palet: Warm Autumn", undertone: "Warm", personalColor: "Warm Autumn", paletteColors: ["#F4C2A1", "#E8A87C", "#C9A27E", "#A67C52", "#FDE3C8"] },
-  ];
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
 
-  const activeLabel = navItems.find((item) => item.id === activePage)?.label
-    || (activePage === "settings" ? "Pengaturan" : "Profil Staf");
+  useEffect(() => {
+    const savedData = localStorage.getItem("malikah_analysis_db");
+    if (savedData) {
+      try { setHistoryData(JSON.parse(savedData)); } catch (e) {}
+    }
+  }, []);
 
-  const filteredCustomers = recentCustomers.filter((customer) =>
-    customer.name.toLowerCase().includes(search.toLowerCase())
-  );
+  // Simpan ke database local storage dengan penanganan kuota memori
+  const saveToDatabase = (newRecord) => {
+    try {
+      const updatedHistory = [newRecord, ...historyData];
+      setHistoryData(updatedHistory);
+      localStorage.setItem("malikah_analysis_db", JSON.stringify(updatedHistory));
+    } catch (e) {
+      console.warn("localStorage penuh, menghapus riwayat lama untuk memberi ruang...");
+      const trimmedHistory = [newRecord, ...historyData.slice(0, 3)];
+      setHistoryData(trimmedHistory);
+      try {
+        localStorage.setItem("malikah_analysis_db", JSON.stringify(trimmedHistory));
+      } catch (err) {
+        console.error("Gagal menyimpan ke localStorage:", err);
+      }
+    }
+  };
 
-  function goTo(page) {
-    setActivePage(page);
-  }
+  const clearDatabase = () => {
+    localStorage.removeItem("malikah_analysis_db");
+    setHistoryData([]);
+    setSelectedHistory(null);
+    alert("Database riwayat berhasil dibersihkan!");
+  };
 
-  const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
-  const todayLocale = new Date().toLocaleDateString("id-ID", options);
-
-  function toggleNotif() {
-    setNotifOpen(!notifOpen);
-  }
+  useEffect(() => {
+    if (Array.isArray(katalogDataRaw) && katalogDataRaw.length > 0) {
+      setKatalogProduk(katalogDataRaw);
+    } else {
+      fetch("/katalog_produk.json")
+        .then((res) => res.json())
+        .then((data) => setKatalogProduk(data))
+        .catch((err) => console.error("Error load JSON:", err));
+    }
+  }, []);
 
   async function startCamera() {
     setCameraError(null);
+    setIsCameraActive(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-      setCameraStream(stream);
-      setIsCameraActive(true);
+      setTimeout(() => {
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      }, 150);
     } catch (err) {
       setCameraError(err);
       setIsCameraActive(false);
@@ -81,491 +94,379 @@ function App() {
   }
 
   function stopCamera() {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach((track) => track.stop());
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
+      videoRef.current.srcObject = null;
     }
-    setCameraStream(null);
     setIsCameraActive(false);
-    setCameraError(null);
   }
 
-  function handleFileChange(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    if (!allowed.includes(file.type)) {
-      setUploadError("Format tidak didukung. Gunakan JPG, JPEG, PNG, atau WEBP.");
-      setUploadedFile(null);
-      setUploadPreview(null);
-      return;
-    }
-    setUploadError(null);
-    setUploadedFile(file);
-    setUploadPreview(URL.createObjectURL(file));
-  }
+  // Konversi RGB ke CIELAB
+  function rgbToLab(r, g, b) {
+    let rN = r / 255, gN = g / 255, bN = b / 255;
+    rN = rN > 0.04045 ? Math.pow((rN + 0.055) / 1.055, 2.4) : rN / 12.92;
+    gN = gN > 0.04045 ? Math.pow((gN + 0.055) / 1.055, 2.4) : gN / 12.92;
+    bN = bN > 0.04045 ? Math.pow((bN + 0.055) / 1.055, 2.4) : bN / 12.92;
 
-  function handleDrop(event) {
-    event.preventDefault();
-    const file = event.dataTransfer.files[0];
-    if (!file) return;
-    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    if (!allowed.includes(file.type)) {
-      setUploadError("Format tidak didukung. Gunakan JPG, JPEG, PNG, atau WEBP.");
-      setUploadedFile(null);
-      setUploadPreview(null);
-      return;
-    }
-    setUploadError(null);
-    setUploadedFile(file);
-    setUploadPreview(URL.createObjectURL(file));
-  }
+    let x = (rN * 0.4124 + gN * 0.3576 + bN * 0.1805) * 100;
+    let y = (rN * 0.2126 + gN * 0.7152 + bN * 0.0722) * 100;
+    let z = (rN * 0.0193 + gN * 0.1192 + bN * 0.9505) * 100;
 
-  function removeUploadedFile() {
-    if (uploadPreview) {
-      URL.revokeObjectURL(uploadPreview);
-    }
-    setUploadedFile(null);
-    setUploadPreview(null);
-    setUploadError(null);
-  }
+    x /= 95.047; y /= 100.000; z /= 108.883;
+    x = x > 0.008856 ? Math.pow(x, 1/3) : (7.787 * x) + (16 / 116);
+    y = y > 0.008856 ? Math.pow(y, 1/3) : (7.787 * y) + (16 / 116);
+    z = z > 0.008856 ? Math.pow(z, 1/3) : (7.787 * z) + (16 / 116);
 
-  useEffect(() => {
-    return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => track.stop());
-      }
+    return {
+      L: Math.round((116 * y) - 16),
+      a: Math.round(500 * (x - y)),
+      b: Math.round(200 * (y - z))
     };
-  }, [cameraStream]);
+  }
 
-  useEffect(() => {
-    if (scanTab !== "camera" && cameraStream) {
-      cameraStream.getTracks().forEach((track) => track.stop());
-      setCameraStream(null);
-      setIsCameraActive(false);
-      setCameraError(null);
+  // Hitung Jarak Warna CIELAB Delta E (Euclidean Distance)
+  function calculateDeltaE(lab1, lab2) {
+    const dL = lab1.L - (lab2.lab_L || lab2.L || 0);
+    const dA = lab1.a - (lab2.lab_A || lab2.a || 0);
+    const dB = lab1.b - (lab2.lab_B || lab2.b || 0);
+    return Math.sqrt(dL * dL + dA * dA + dB * dB);
+  }
+
+  function processColorAnalysis(imageSrc) {
+    setIsAnalyzing(true);
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = imageSrc;
+    img.onload = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+
+      const centerX = Math.floor(img.width / 2);
+      const centerY = Math.floor(img.height / 2);
+      const imgData = ctx.getImageData(centerX - 5, centerY - 5, 10, 10).data;
+
+      let totalR = 0, totalG = 0, totalB = 0, count = 0;
+      for (let i = 0; i < imgData.length; i += 4) {
+        totalR += imgData[i];
+        totalG += imgData[i + 1];
+        totalB += imgData[i + 2];
+        count++;
+      }
+
+      const avgR = Math.round(totalR / count);
+      const avgG = Math.round(totalG / count);
+      const avgB = Math.round(totalB / count);
+
+      const sumRGB = avgR + avgG + avgB || 1;
+      const pctRed = ((avgR / sumRGB) * 100).toFixed(1);
+      const pctGreen = ((avgG / sumRGB) * 100).toFixed(1);
+      const pctBlue = ((avgB / sumRGB) * 100).toFixed(1);
+
+      const lab = rgbToLab(avgR, avgG, avgB);
+      let undertone = "Neutral";
+      let personalColor = "Soft Autumn";
+      let paletteColors = ["#D4C5C5", "#B8B0A8", "#E8E0D8", "#C9B8A8", "#F2EDE0"];
+
+      if (lab.b > 14 && lab.a > 5) {
+        undertone = "Warm";
+        personalColor = "Warm Spring";
+        paletteColors = ["#F4C2A1", "#E8A87C", "#C9A27E", "#A67C52", "#FDE3C8"];
+      } else if (lab.b < 10) {
+        undertone = "Cool";
+        personalColor = "Cool Winter";
+        paletteColors = ["#E3E8F2", "#B8C4D4", "#8B9DC3", "#5A6B7E", "#F5F7FA"];
+      }
+
+      const listData = katalogProduk.length > 0 ? katalogProduk : (Array.isArray(katalogDataRaw) ? katalogDataRaw : []);
+
+      // 1. Hitung Delta E & urutkan dari jarak terkecil
+      const productsWithDeltaE = listData.map((item) => ({
+        ...item,
+        deltaE: calculateDeltaE(lab, item)
+      })).sort((a, b) => a.deltaE - b.deltaE);
+
+      // 2. Variasi Merek (Grouped Sampling)
+      const brandMap = new Map();
+      productsWithDeltaE.forEach((p) => {
+        const brandKey = p.brand || p.merek || "Lainnya";
+        if (!brandMap.has(brandKey)) {
+          brandMap.set(brandKey, p);
+        }
+      });
+
+      let recommendedProducts = Array.from(brandMap.values()).slice(0, 5);
+
+      if (recommendedProducts.length < 5) {
+        const existingIds = new Set(recommendedProducts.map((p) => p.shade_code_name || p.product_name));
+        for (const p of productsWithDeltaE) {
+          if (!existingIds.has(p.shade_code_name || p.product_name)) {
+            recommendedProducts.push(p);
+            existingIds.add(p.shade_code_name || p.product_name);
+          }
+          if (recommendedProducts.length >= 5) break;
+        }
+      }
+
+      const now = new Date();
+      const dateFormatted = now.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+      const timeFormatted = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+      const nameToSave = customerName.trim() || "Pelanggan Anonim";
+
+      const newRecord = {
+        id: Date.now(),
+        name: nameToSave,
+        dateTime: `${dateFormatted} · ${timeFormatted}`,
+        status: "Berhasil",
+        result: `Undertone: ${undertone} — Palet: ${personalColor}`,
+        undertone: undertone,
+        personalColor: personalColor,
+        paletteColors: paletteColors,
+        pigmen: { red: pctRed, green: pctGreen, blue: pctBlue, rgb: `rgb(${avgR}, ${avgG}, ${avgB})` },
+        cielab: lab,
+        recommendedProducts: recommendedProducts,
+        capturedImage: imageSrc
+      };
+
+      saveToDatabase(newRecord);
+      setIsAnalyzing(false);
+      setSelectedHistory(newRecord);
+      setActivePage("reports");
+    };
+  }
+
+  function capturePhoto() {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      // Kompresi resolusi agar tidak boros memori
+      canvas.width = 320;
+      canvas.height = 240;
+      const ctx = canvas.getContext("2d");
+      ctx.filter = `brightness(${brightness}%) contrast(${contrast}%)`;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Simpan sebagai JPEG ringan (kualitas 0.5)
+      const imageData = canvas.toDataURL("image/jpeg", 0.5);
+      stopCamera();
+      processColorAnalysis(imageData);
     }
-  }, [scanTab, cameraStream]);
+  }
+
+  function handleFileChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadedFile(file);
+    setUploadPreview(URL.createObjectURL(file));
+  }
+
+  function analyzeUploadedFile() {
+    if (uploadPreview) processColorAnalysis(uploadPreview);
+  }
+
+  const todayLocale = new Date().toLocaleDateString("id-ID", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   const filteredHistory = historyData.filter((item) => {
-    const matchName = searchHistory === "" || item.name.toLowerCase().includes(searchHistory.toLowerCase());
-    const matchDate = filterDate === "" || item.dateTime.startsWith(filterDate);
-    const matchStatus = filterStatus === "Semua status" || item.status === filterStatus;
-    return matchName && matchDate && matchStatus;
+    return (searchHistory === "" || item.name.toLowerCase().includes(searchHistory.toLowerCase())) &&
+      (filterDate === "" || item.dateTime.includes(filterDate)) &&
+      (filterStatus === "Semua status" || item.status === filterStatus);
   });
 
   return (
     <div className="app-layout">
+      <canvas ref={canvasRef} style={{ display: "none" }} />
       <aside className="sidebar">
-        <div className="brand">
-          <img src={logoImage} alt="Malikah Beauty Studio Logo" className="brand-logo" />
-        </div>
-
+        <div className="brand"><img src={logoImage} alt="Logo" className="brand-logo" /></div>
         <div className="workspace-label">WORKSPACE</div>
-        <nav className="nav-list" aria-label="Navigasi utama">
+        <nav className="nav-list">
           {navItems.map((item) => (
-            <button
-              key={item.id}
-              className={`nav-item ${activePage === item.id ? "active" : ""}`}
-              onClick={() => goTo(item.id)}
-            >
+            <button key={item.id} className={`nav-item ${activePage === item.id ? "active" : ""}`} onClick={() => setActivePage(item.id)}>
               <span className="nav-icon">{item.icon}</span>
               <span>{item.label}</span>
-              {item.id === "scan" && <span className="nav-new">NEW</span>}
             </button>
           ))}
         </nav>
-
-        <div className="sidebar-bottom">
-          <div className="help-card">
-            <div className="help-sparkle">✧</div>
-            <strong>Butuh bantuan?</strong>
-            <p>Panduan singkat untuk membantu proses analisis pelanggan.</p>
-            <button onClick={() => alert("Panduan staf akan ditambahkan pada tahap berikutnya.")}>
-              Lihat panduan <span>↗</span>
-            </button>
-          </div>
-          <button className={`nav-item bottom-nav ${activePage === "settings" ? "active" : ""}`} onClick={() => goTo("settings")}>
-            <span className="nav-icon">⚙</span><span>Pengaturan</span>
-          </button>
-          <div className="staff-profile">
-            <div className="staff-avatar">MB</div>
-            <div className="staff-info"><strong>Staf Malika</strong><span>Administrator</span></div>
-            <button className="more-button" aria-label="Opsi profil" onClick={() => goTo("profile")}>•••</button>
-          </div>
-        </div>
       </aside>
 
       <div className="main-area">
         <header className="topbar">
-          <div className="topbar-left">
-            {activePage === "dashboard" ? (
-              <>
-                <div className="eyebrow"><span>✦</span> YOUR BEAUTY, YOUR COLORS</div>
-                <h1>Selamat datang, <em>Malika!</em></h1>
-                <p className="welcome-description">Bantu setiap pelanggan menemukan warna yang membuat mereka bersinar.</p>
-              </>
-            ) : (
-              <>
-                <div className="eyebrow"><span>✦</span> MALIKA BEAUTY STUDIO</div>
-                <h1>{activeLabel}</h1>
-              </>
-            )}
-          </div>
-          <div className="topbar-right">
-            <div className="today-label"><span>▦</span>{todayLocale}</div>
-            <div className="status-dot" aria-label="Sistem online"></div>
-            <button className="notification-button" onClick={toggleNotif}>🔔<i /></button>
-            {notifOpen && (
-              <div className="notif-panel">
-                <div className="notif-header">Notifikasi</div>
-                <div className="notif-empty">Belum ada notifikasi</div>
-                <button className="notif-close" onClick={toggleNotif}>Tutup</button>
-              </div>
-            )}
-            <div className="topbar-avatar">MB</div>
-          </div>
+          <div className="topbar-left"><h1>Selamat datang, <em>Malika!</em></h1></div>
+          <div className="topbar-right"><div className="today-label">{todayLocale}</div></div>
         </header>
 
         <div className="page-content">
           {activePage === "dashboard" && (
-            <>
-          <section className="hero-card">
-            <div className="hero-copy">
-              <div className="hero-label"><span>✧</span> PERSONAL COLOR ANALYSIS</div>
-              <h2>Temukan warna terbaik<br />untuk setiap <em>versi dirimu.</em></h2>
-              <p>Mulai analisis personal color untuk membantu pelanggan mengenali undertone dan pilihan makeup yang sesuai.</p>
-              <button className="primary-button" onClick={() => goTo("scan")}>Mulai Face Scan <span>→</span></button>
-            </div>
-            <div className="hero-image">
-              <img src={dashboardImage} alt="Dashboard illustration" className="hero-img" />
-            </div>
-          </section>
-
-          <section className="stats-grid" aria-label="Ringkasan aktivitas">
-            {initialStats.map((stat, index) => (
-              <article className="stat-card" key={stat.label}>
-                <div className={`stat-icon stat-icon-${index}`}>{stat.icon}</div>
-                <div className="stat-label">{stat.label}</div>
-                <div className="stat-value">{stat.value}</div>
-                <div className={`stat-note ${index === 0 ? "positive" : ""}`}>{stat.note}</div>
-                <div className="stat-decoration">{index === 0 ? "↗" : index === 1 ? "✧" : "♡"}</div>
-              </article>
-            ))}
-          </section>
-
-          <section className="content-grid">
-            <article className="panel recent-panel">
-              <div className="panel-heading">
-                <div><h3>Analisis Terbaru</h3><p>Pantau hasil analisis pelanggan terakhir.</p></div>
-                <button className="text-button" onClick={() => goTo("history")}>Lihat semua <span>→</span></button>
+            <section className="hero-card">
+              <div className="hero-copy">
+                <h2>Temukan warna terbaik untuk setiap <em>versi dirimu.</em></h2>
+                <button className="primary-button" onClick={() => setActivePage("scan")}>Mulai Face Scan →</button>
               </div>
-              <div className="table-tools">
-                <div className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama pelanggan..." aria-label="Cari nama pelanggan" /></div>
-                <button className="filter-button" onClick={() => setSearch("")}>↕ Filter</button>
-              </div>
-              <div className="customer-table-wrap">
-                <table className="customer-table">
-                  <thead><tr><th>PELANGGAN</th><th>UNDERTONE</th><th>STATUS</th><th></th></tr></thead>
-                  <tbody>
-                    {filteredCustomers.map((customer) => (
-                      <tr key={customer.name}>
-                        <td><div className="customer-cell"><div className={`customer-avatar avatar-${customer.color}`}>{customer.initials}</div><div><strong>{customer.name}</strong><span>{customer.date}</span></div></div></td>
-                        <td>{customer.undertone === "—" ? <span className="muted-dash">—</span> : <span className={`undertone-tag ${customer.color}`}>{customer.undertone}</span>}</td>
-                        <td><span className={`status-tag ${customer.status === "Selesai" ? "done" : "waiting"}`}><i />{customer.status}</span></td>
-                        <td><button className="row-more" aria-label={`Lihat ${customer.name}`} onClick={() => goTo("reports")}>···</button></td>
-                      </tr>
-                    ))}
-                    {filteredCustomers.length === 0 && <tr><td colSpan="4" className="empty-state">Nama pelanggan tidak ditemukan.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-              <div className="table-foot">Menampilkan {filteredCustomers.length} dari {recentCustomers.length} pelanggan contoh</div>
-            </article>
+              <div className="hero-image"><img src={dashboardImage} alt="Dashboard" className="hero-img" /></div>
+            </section>
+          )}
 
-            <article className="panel quick-panel">
-              <div className="panel-heading"><div><h3>Akses Cepat</h3><p>Yang sering kamu butuhkan.</p></div></div>
-              <button className="quick-action" onClick={() => goTo("scan")}><div className="quick-icon pink-icon">◎</div><div><strong>Analisis pelanggan</strong><span>Mulai pemindaian wajah baru</span></div><b>→</b></button>
-              <button className="quick-action" onClick={() => goTo("history")}><div className="quick-icon lilac-icon">▤</div><div><strong>Riwayat analisis</strong><span>Lihat data analisis sebelumnya</span></div><b>→</b></button>
-              <button className="quick-action" onClick={() => goTo("reports")}><div className="quick-icon peach-icon">♡</div><div><strong>Laporan personal color</strong><span>Buka hasil dan rekomendasi</span></div><b>→</b></button>
-              <div className="tip-card"><span>✧</span><div><strong>Tips hari ini</strong><p>Pastikan pencahayaan wajah merata agar hasil analisis lebih konsisten.</p></div></div>
-            </article>
-          </section>
-          <footer className="page-footer"><span>© 2026 Malika Beauty Studio</span><span>Made with care <b>♡</b></span></footer>
-            </>
-          )}</div>
-
-      {activePage !== "dashboard" && (
-        <div className="page-content subpage-content">
-          {activePage === "scan" ? (
+          {activePage === "scan" && (
             <section className="scan-page">
               <div className="scan-header">
                 <h1>Mulai Analisis Personal Color</h1>
-                <p>Temukan warna yang paling cocok untuk wajah Anda dengan analisis personal color terbaru.</p>
+                <p>Analisis komposisi pigmen warna kulit & pencocokan katalog produk.</p>
               </div>
-              <div className="scan-content">
-                <div className="scan-left">
-                  <div className="scan-tabs">
-                    <button className={`scan-tab ${scanTab === "camera" ? "active" : ""}`} onClick={() => setScanTab("camera")}>Ambil Foto</button>
-                    <button className={`scan-tab ${scanTab === "upload" ? "active" : ""}`} onClick={() => setScanTab("upload")}>Unggah Foto</button>
-                  </div>
 
-                  {scanTab === "camera" ? (
-                    <>
-                      {cameraError && (
-                        <div className="camera-error">
-                          <p>Kamera tidak dapat diakses.</p>
-                          <button className="scan-start-button" onClick={startCamera}>Coba Lagi</button>
-                        </div>
-                      )}
-                      {isCameraActive && cameraStream ? (
-                        <>
-                          <video className="camera-preview" autoPlay playsInline ref={(el) => { if (el) el.srcObject = cameraStream; }} />
-                          <button className="scan-start-button" onClick={stopCamera}>Mulai Analisis</button>
-                        </>
-                      ) : (
-                        <button className="scan-start-button" onClick={startCamera}>Mulai Foto</button>
-                      )}
-                      <div className="scan-guidelines">
-                        <p>• Pastikan wajah terlihat penuh dan jelas</p>
-                        <p>• Gunakan pencahayaan yang merata</p>
-                        <p>• Hindari filter atau efek foto</p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="upload-area" onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
-                        <input type="file" accept="image/jpeg, image/jpg, image/png, image/webp" onChange={handleFileChange} className="file-input" />
-                        <label className="upload-label">
-                          <span className="upload-icon">📁</span>
-                          <p className="upload-text">Klik atau seret foto di sini</p>
-                          <p className="upload-hint">JPG, JPEG, PNG, WEBP</p>
-                        </label>
-                        {uploadError && <p className="upload-error">{uploadError}</p>}
-                        {uploadPreview && (
-                          <div className="preview-container">
-                            <img className="preview-img" src={uploadPreview} alt="Preview" />
-                            <button className="remove-upload" onClick={removeUploadedFile}>×</button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="scan-guidelines">
-                        <p>• Pilih foto wajah yang jelas</p>
-                        <p>• Pastikan pencahayaan merata</p>
-                        <p>• Hindari filter atau efek foto</p>
-                      </div>
-                      <button className="scan-start-button" onClick={() => alert("Fitur analisis akan aktif setelah AI terhubung.")} disabled={!uploadedFile}>Mulai Analisis</button>
-                    </>
+              <div style={{ marginBottom: "20px", maxWidth: "400px" }}>
+                <label style={{ fontWeight: "600", fontSize: "14px", display: "block", marginBottom: "6px" }}>Nama Pelanggan:</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Nadia Aulia"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
+                />
+              </div>
+
+              <div className="scan-tabs">
+                <button className={`scan-tab ${scanTab === "camera" ? "active" : ""}`} onClick={() => setScanTab("camera")}>Ambil Foto</button>
+                <button className={`scan-tab ${scanTab === "upload" ? "active" : ""}`} onClick={() => setScanTab("upload")}>Unggah Foto</button>
+              </div>
+
+              {scanTab === "camera" ? (
+                isCameraActive ? (
+                  <div>
+                    <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", maxWidth: "480px", height: "320px", borderRadius: "12px", objectFit: "cover", filter: `brightness(${brightness}%) contrast(${contrast}%)` }} />
+                    <div style={{ marginTop: "10px", maxWidth: "480px" }}>
+                      <label style={{ fontSize: "12px", fontWeight: "bold" }}>Kecerahan: {brightness}%</label>
+                      <input type="range" min="70" max="150" value={brightness} onChange={(e) => setBrightness(e.target.value)} style={{ width: "100%" }} />
+                    </div>
+                    <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
+                      <button className="primary-button" onClick={capturePhoto} disabled={isAnalyzing}>{isAnalyzing ? "Menganalisis..." : "📸 Ambil Foto & Analisis"}</button>
+                      <button className="scan-start-button" onClick={stopCamera} style={{ backgroundColor: "#888" }}>Hentikan Kamera</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="scan-start-button" onClick={startCamera}>Mulai Kamera</button>
+                )
+              ) : (
+                <div style={{ padding: "20px", border: "2px dashed #ccc", borderRadius: "12px", textAlign: "center" }}>
+                  <input type="file" accept="image/*" onChange={handleFileChange} />
+                  {uploadPreview && (
+                    <div style={{ marginTop: "15px" }}>
+                      <img src={uploadPreview} alt="Preview" style={{ maxWidth: "250px", borderRadius: "8px" }} /><br />
+                      <button className="primary-button" onClick={analyzeUploadedFile} style={{ marginTop: "10px" }} disabled={isAnalyzing}>{isAnalyzing ? "Menganalisis..." : "🔍 Analisis Foto Unggahan"}</button>
+                    </div>
                   )}
-                  <div className="scan-info-card">
-                    <h3>Informasi Penting</h3>
-                    <p>Hasil analisis akan ditampilkan dalam beberapa detik. Pastikan koneksi internet stabil selama proses berlangsung.</p>
-                  </div>
                 </div>
-                <div className="scan-right">
-                  <div className="scan-process-card">
-                    <h3>Proses Analisis</h3>
-                    <div className="process-steps">
-                      <div className="process-step">
-                        <span className="step-number">1</span>
-                        <div className="step-content">
-                          <strong>Ambil foto wajah</strong>
-                          <p>Pastikan pencahayaan mencukupi</p>
-                        </div>
-                      </div>
-                      <div className="process-step">
-                        <span className="step-number">2</span>
-                        <div className="step-content">
-                          <strong>Analisis warna kulit</strong>
-                          <p>Sistem mendeteksi undertone Anda</p>
-                        </div>
-                      </div>
-                      <div className="process-step">
-                        <span className="step-number">3</span>
-                        <div className="step-content">
-                          <strong>Hasil rekomendasi</strong>
-                          <p>Dapatkan palet warna yang cocok</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="scan-example-card">
-                    <h3>Contoh Foto yang Baik</h3>
-                    <div className="example-grid">
-                      <div className="example-item good"><span>✓</span><p>Cahaya wajah merata</p></div>
-                      <div className="example-item good"><span>✓</span><p>Wajah menghadap ke depan</p></div>
-                      <div className="example-item bad"><span>✗</span><p>Terlalu bayang-bayang</p></div>
-                      <div className="example-item bad"><span>✗</span><p>Menggunakan filter foto</p></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              )}
             </section>
-          ) : activePage === "history" ? (
+          )}
+
+          {activePage === "history" && (
             <section className="history-page">
-              <div className="history-header">
-                <div className="history-left">
-                  <div className="history-label">✧ RIWAYAT ANALISIS</div>
-                  <h1>Daftar Riwayat Analisis</h1>
-                  <p className="history-desc">Berikut adalah seluruh sesi face scan yang pernah dilakukan pelanggan.</p>
-                </div>
-                <div className="history-decor">
-                  <span className="decor-text">Setiap wajah punya warna unik</span>
-                  <span className="decor-heart">♡</span>
-                  <div className="decor-flower">✿</div>
-                </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h1>Daftar Riwayat Analisis</h1>
+                <button onClick={clearDatabase} style={{ backgroundColor: "#ff4d4d", color: "#fff", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer" }}>
+                  🗑️ Bersihkan Riwayat Lama
+                </button>
               </div>
 
-              <div className="history-filter-card">
-                <div className="filter-row">
-                  <div className="filter-item">
-                    <span>🔍</span>
-                    <input type="text" placeholder="Cari nama pelanggan..." value={searchHistory} onChange={(e) => setSearchHistory(e.target.value)} />
-                  </div>
-                  <div className="filter-item">
-                    <span>📅</span>
-                    <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} />
-                  </div>
-                  <div className="filter-item">
-                    <span>📊</span>
-                    <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                      <option>Semua status</option>
-                      <option>Berhasil</option>
-                      <option>Gagal</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="history-table-card">
-                <table className="history-table">
+              <div className="history-table-card" style={{ marginTop: "15px" }}>
+                <table className="history-table" style={{ width: "100%" }}>
                   <thead>
-                    <tr>
-                      <th style={{width:40}}>No.</th>
-                      <th>Nama Pelanggan</th>
-                      <th>Tanggal & Waktu Scan</th>
-                      <th>Status Analisis</th>
-                      <th>Hasil Singkat</th>
-                      <th style={{width:130}}>Aksi</th>
-                    </tr>
+                    <tr><th>Nama Pelanggan</th><th>Tanggal</th><th>Status</th><th>Hasil Undertone</th><th>Aksi</th></tr>
                   </thead>
                   <tbody>
                     {filteredHistory.map((item) => (
                       <tr key={item.id}>
-                        <td>{item.id}</td>
-                        <td>
-                          <div className="customer-row-cell">
-                            <div className="avatar-circle" style={{backgroundColor: item.avatarColor}}>{item.initials}</div>
-                            <div><strong>{item.name}</strong></div>
-                          </div>
-                        </td>
+                        <td><strong>{item.name}</strong></td>
                         <td>{item.dateTime}</td>
-                        <td>
-                          <span className={`status-badge ${item.status === 'Berhasil' ? 'success' : 'fail'}`}>{item.status}</span>
-                        </td>
+                        <td><span className="status-badge success">{item.status}</span></td>
                         <td>{item.result}</td>
-                        <td><button className="detail-button" onClick={() => { setSelectedHistory(item); setActivePage("reports"); }}>Lihat Detail <span>→</span></button></td>
+                        <td><button className="detail-button" onClick={() => { setSelectedHistory(item); setActivePage("reports"); }}>Lihat Detail →</button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <div className="history-pagination">
-                  <span>Menampilkan 1–{filteredHistory.length} dari {historyData.length} hasil</span>
-                  <div className="pagination-controls">
-                    <button>‹</button>
-                    <button className="active">1</button>
-                    <button>2</button>
-                    <button>3</button>
-                    <button>4</button>
-                    <button>›</button>
+              </div>
+            </section>
+          )}
+
+          {activePage === "reports" && selectedHistory && (
+            <section className="report-detail-page">
+              <button className="report-back-btn" onClick={() => setActivePage("history")}>← Kembali ke Riwayat Analisis</button>
+              <div className="report-detail-header" style={{ marginTop: "15px" }}>
+                <h1>Hasil Analisis Personal Color & Ekstraksi Kulit</h1>
+                <p>Pelanggan: <strong>{selectedHistory.name}</strong> • {selectedHistory.dateTime}</p>
+              </div>
+
+              <div style={{ display: "flex", gap: "20px", marginTop: "20px", flexWrap: "wrap" }}>
+                <div>
+                  <h3>Foto Sampel:</h3>
+                  <img src={selectedHistory.capturedImage} alt="Foto" style={{ width: "220px", borderRadius: "12px", border: "2px solid #e3a8a8" }} />
+                  
+                  {selectedHistory.pigmen && (
+                    <div style={{ marginTop: "15px", backgroundColor: "#fff", padding: "12px", borderRadius: "8px", border: "1px solid #eee", width: "220px" }}>
+                      <h4 style={{ margin: "0 0 8px 0", fontSize: "14px" }}>Komposisi Pigmen Kulit:</h4>
+                      <p style={{ margin: "4px 0", fontSize: "12px" }}>🔴 Pigmen Merah (R): <strong>{selectedHistory.pigmen.red}%</strong></p>
+                      <p style={{ margin: "4px 0", fontSize: "12px" }}>🟢 Pigmen Hijau (G): <strong>{selectedHistory.pigmen.green}%</strong></p>
+                      <p style={{ margin: "4px 0", fontSize: "12px" }}>🔵 Pigmen Biru (B): <strong>{selectedHistory.pigmen.blue}%</strong></p>
+                      <hr style={{ border: "none", borderTop: "1px dashed #ccc", margin: "8px 0" }} />
+                      <p style={{ margin: "4px 0", fontSize: "12px" }}><strong>CIELAB:</strong> L*={selectedHistory.cielab?.L}, a*={selectedHistory.cielab?.a}, b*={selectedHistory.cielab?.b}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="report-card" style={{ flex: 1, minWidth: "300px" }}>
+                  <div className="personal-color-name" style={{ fontSize: "22px", fontWeight: "bold" }}>{selectedHistory.personalColor}</div>
+                  <div className="undertone-chip" style={{ marginTop: "5px" }}>Undertone: {selectedHistory.undertone}</div>
+
+                  <h4 style={{ marginTop: "15px" }}>Rekomendasi Palet Warna Pakaian/Makeup:</h4>
+                  <div className="palette-row" style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                    {selectedHistory.paletteColors.map((c, i) => (
+                      <div key={i} style={{ backgroundColor: c, width: "35px", height: "35px", borderRadius: "50%", border: "1px solid #ccc" }} />
+                    ))}
+                  </div>
+
+                  <h4 style={{ marginTop: "20px" }}>Rekomendasi Produk Katalog Lengkap (Sesuai $\Delta E$ CIELAB):</h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "10px" }}>
+                    {selectedHistory.recommendedProducts.map((p, idx) => {
+                      const brand = p.brand || p.merek || "-";
+                      const product = p.product_name || p.nama_produk || "-";
+                      const shadeName = p.shade_code_name || p.nama_shade || p.kode_shade || "-";
+                      const skintone = p.skintone_category || p.kategori_skintone || "-";
+                      const skintype = p.skin_type_recommendation || p.rekomendasi_jenis_kulit || "-";
+                      const undertone = p.undertone_category || p.kategori_undertone || "-";
+                      const deltaEValue = p.deltaE ? p.deltaE.toFixed(2) : null;
+
+                      return (
+                        <div key={idx} style={{ padding: "12px", backgroundColor: "#fafafa", borderRadius: "8px", borderLeft: "4px solid #e3a8a8" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ fontWeight: "bold", fontSize: "15px", color: "#333" }}>
+                              {brand} - {product}
+                            </div>
+                            {deltaEValue && (
+                              <span style={{ fontSize: "11px", backgroundColor: "#e8f5e9", color: "#2e7d32", padding: "2px 8px", borderRadius: "4px", fontWeight: "bold" }}>
+                                Match Score ($\Delta E$): {deltaEValue}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#555", marginTop: "6px" }}>
+                            <span>💄 <strong>Shade:</strong> {shadeName}</span> • 
+                            <span> 🎨 <strong>Skintone:</strong> {skintone}</span>
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#555", marginTop: "4px" }}>
+                            <span>✨ <strong>Skin Type:</strong> {skintype}</span> • 
+                            <span> ☀️ <strong>Undertone Category:</strong> {undertone}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
             </section>
-          
-          ) : activePage === "reports" ? (
-            <section className="report-detail-page">
-              {selectedHistory ? (
-                <div className="report-detail-view">
-                  <button className="report-back-btn" onClick={() => { setSelectedHistory(null); setActivePage("history"); }}>← Kembali ke Riwayat Analisis</button>
-                  <div className="report-detail-header">
-                    <div className="report-detail-label">✧ LAPORAN PERSONAL COLOR</div>
-                    <h1>Hasil Analisis Personal Color</h1>
-                    <p>Berikut adalah hasil analisis warna dan rekomendasi makeup untuk kamu.</p>
-                  </div>
-                  <div className="report-detail-body">
-                    <div className="report-customer">
-                      <div className="report-avatar">{selectedHistory.initials}</div>
-                      <div className="report-customer-info">
-                        <div className="report-customer-name">{selectedHistory.name}</div>
-                        <div className="report-customer-meta">{selectedHistory.dateTime} • Undertone: {selectedHistory.undertone} • Personal Color: {selectedHistory.personalColor}</div>
-                      </div>
-                    </div>
-                    <div className="report-grid">
-                      <div className="report-card">
-                        <div className="report-card-title">Ringkasan Hasil Analisis</div>
-                        <div className="personal-color-name">{selectedHistory.personalColor}</div>
-                        <div className="undertone-chip">Undertone: {selectedHistory.undertone}</div>
-                        <div className="char-list">
-                          <div className="char-item"><span>💧</span><strong>Undertone:</strong> {selectedHistory.undertone}</div>
-                          <div className="char-item"><span>☀️</span><strong>Intensitas Wara:</strong> Light - Medium</div>
-                          <div className="char-item"><span>⚖️</span><strong>Kontras:</strong> Rendah - Sedang</div>
-                        </div>
-                        <div className="palette-row">
-                          {selectedHistory.paletteColors.map((c,i)=>(<div key={i} className="palette-swatch" style={{backgroundColor:c}}></div>))}
-                        </div>
-                        <div className="report-card-note">Warna-warna ini akan membuat wajahmu terlihat lebih cerah, segar, dan sehat.</div>
-                      </div>
-                      <div className="report-card">
-                        <div className="report-card-title">Rekomendasi Warna Pakaian</div>
-                        <div className="cat-row">
-                          <div className="cat-item"><div className="cat-title">Warna Utama</div><div className="cat-swatches">{selectedHistory.paletteColors.slice(0,4).map((c,i)=>(<div key={i} className="cat-swatch" style={{backgroundColor:c}}></div>))}</div></div>
-                          <div className="cat-item"><div className="cat-title">Warna Netral</div><div className="cat-swatches">{['#D4C5C5','#B8B0A8','#E8E0D8','#C9B8A8'].map((c,i)=>(<div key={i} className="cat-swatch" style={{backgroundColor:c}}></div>))}</div></div>
-                          <div className="cat-item"><div className="cat-title">Warna Aksen</div><div className="cat-swatches">{selectedHistory.paletteColors.slice(2,6).map((c,i)=>(<div key={i} className="cat-swatch" style={{backgroundColor:c}}></div>))}</div></div>
-                        </div>
-                        <div className="cat-row outfit-row">
-                          {['Casual','Formal','Soft Look','Bold Accent'].map((o,i)=>(<div key={i} className="outfit-item"><div className="outfit-img">{['◍','□','◇','★'][i]}</div><div className="outfit-label">{o}</div></div>))}
-                        </div>
-                        <div className="report-card-title">Rekomendasi Warna Makeup</div>
-                        <div className="makeup-row">
-                          {[
-                            {name:'Foundation', desc:'Warm / Neutral'},
-                            {name:'Blush', desc:'Peach, Coral, Apricot'},
-                            {name:'Lipstick', desc:'Peach, Coral, Rose Warm'},
-                            {name:'Eyeshadow', desc:'Warm Brown, Peach, Gold'},
-                            {name:'Bronzer', desc:'Highlighter Warm Tone'}
-                          ].map((m,i)=>(<div key={i} className="makeup-item"><div className="makeup-img">◉</div><div className="makeup-info"><div className="makeup-name">{m.name}</div><div className="makeup-desc">{m.desc}</div></div></div>))}
-                        </div>
-                        <div className="report-card-note">Warna yang tepat, bahan yang selalu enak dipakai. Tapo tentang versi terbaik dari dirimu. ♡</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="report-detail-actions">
-                    <button className="report-btn-download">⬇ Unduh PDF</button>
-                    <button className="report-btn-print">🖨 Cetak Laporan</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="placeholder-card"><h2>Laporan personal color</h2><p>Hasil undertone dan rekomendasi makeup pelanggan akan muncul di halaman ini setelah AI dan API terhubung.</p><div className="report-swatches"><span /><span /><span /><span /><span /></div></div>
-              )}
-            </section>
-          ) : activePage === "settings" ? (
-            <section className="placeholder-card">
-              <h2>Pengaturan workspace</h2>
-              <p>Pengaturan profil salon, akun staf, dan preferensi sistem dapat ditambahkan di tahap berikutnya.</p>
-            </section>
-          ) : (
-            <section className="placeholder-card">
-              <h2>Profil staf</h2>
-              <p>Pengaturan profil administrator akan ditambahkan di tahap berikutnya.</p>
-            </section>
           )}
-          <footer className="page-footer">
-            <span>© 2026 Malika Beauty Studio</span>
-            <span>Made with care <b>♡</b></span>
-          </footer>
-
         </div>
-      )}
       </div>
     </div>
   );
