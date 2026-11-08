@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import "./App.css";
 import logoImage from "./assets/logo.png";
 import dashboardImage from "./assets/fotodashboard.png";
-import katalogDataRaw from "../public/katalog_produk.json";
 
 // Import modul terpisah
 import CameraScanner from "./components/CameraScanner";
@@ -68,10 +67,21 @@ function App() {
     }
   };
 
+  // Ambil data katalog produk secara asynchronous dari folder public
   useEffect(() => {
-    if (Array.isArray(katalogDataRaw) && katalogDataRaw.length > 0) {
-      setKatalogProduk(katalogDataRaw);
-    }
+    fetch("/katalog_produk.json")
+      .then((res) => {
+        if (!res.ok) throw new Error("Gagal memuat katalog produk");
+        return res.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setKatalogProduk(data);
+        }
+      })
+      .catch((err) => {
+        console.warn("Gagal mengambil katalog_produk.json:", err);
+      });
   }, []);
 
   // Handler Utama Pengolahan Foto via API Hugging Face & Supabase
@@ -111,7 +121,7 @@ function App() {
         const lab = rgbToLab(rgb[0], rgb[1], rgb[2]);
 
         // Hitung Pencocokan Produk Katalog berbasis ΔE CIELAB
-        const listData = katalogProduk.length > 0 ? katalogProduk : (Array.isArray(katalogDataRaw) ? katalogDataRaw : []);
+        const listData = katalogProduk;
         const productsWithDeltaE = listData.map((item) => ({
           ...item,
           deltaE: calculateDeltaE(lab, item)
