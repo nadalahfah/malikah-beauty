@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import "./App.css";
 import logoImage from "./assets/logo.png";
 import dashboardImage from "./assets/fotodashboard.png";
+import katalogProduk from "./katalog_produk.json";
 import CameraScanner from "./components/CameraScanner";
 import HistoryList from "./components/HistoryList";
 import { supabase } from "./utils/supabaseClient";
@@ -25,6 +26,14 @@ function App() {
   const [modelError, setModelError] = useState("");
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analysisError, setAnalysisError] = useState("");
+
+  const recommendedProducts = analysisResult
+    ? katalogProduk.filter((product) => {
+        const category = product.skintone_category?.toLowerCase() || "";
+        const predictedTone = analysisResult.tone.toLowerCase();
+        return new RegExp(`\\b${predictedTone}\\b`).test(category);
+      })
+    : [];
 
   useEffect(() => {
     let isCurrent = true;
@@ -85,12 +94,16 @@ function App() {
         confidence: result.confidence,
       });
 
-      const { error } = await supabase.from("skin_tone_logs").insert({
-        predicted_tone: result.tone,
-        confidence_score: result.confidence,
-        user_feedback: null,
-      });
-      if (error) throw error;
+      try {
+        const { error } = await supabase.from("skin_tone_logs").insert({
+          predicted_tone: result.tone,
+          confidence_score: result.confidence,
+        });
+        if (error) throw error;
+      } catch (error) {
+        console.error("Gagal menyimpan hasil ke tabel skin_tone_logs:", error);
+        throw error;
+      }
     } catch (error) {
       console.error("Gagal memproses analisis skin tone:", error);
       setAnalysisError(
@@ -160,11 +173,34 @@ function App() {
                 <>
                   {analysisError && <p className="scan-error" role="alert">{analysisError}</p>}
                   {analysisResult && (
-                    <div className="scan-result" aria-live="polite">
-                      <p className="scan-result-label">HASIL ANALISIS</p>
-                      <h2>Tone Kulit: <span>{analysisResult.tone}</span></h2>
-                      <p>Persentase keyakinan: <strong>{Math.round(analysisResult.confidence * 100)}%</strong></p>
-                    </div>
+                    <>
+                      <div className="scan-result" aria-live="polite">
+                        <p className="scan-result-label">HASIL ANALISIS</p>
+                        <h2>Tone Kulit: <span>{analysisResult.tone}</span></h2>
+                        <p>Persentase keyakinan: <strong>{Math.round(analysisResult.confidence * 100)}%</strong></p>
+                      </div>
+                      <section className="recommended-products" aria-labelledby="recommended-products-title">
+                        <h2 id="recommended-products-title">Rekomendasi Produk</h2>
+                        {recommendedProducts.length > 0 ? (
+                          <div className="recommended-product-grid">
+                            {recommendedProducts.map((product, index) => (
+                              <article
+                                className="recommended-product-card"
+                                key={`${product.brand}-${product.product_name}-${product.shade_code_name}-${index}`}
+                              >
+                                <p className="recommended-product-brand">{product.brand || "Brand tidak diketahui"}</p>
+                                <h3>{product.product_name || "Produk tanpa nama"}</h3>
+                                <p>Shade: <strong>{product.shade_code_name || product.shade_number || "-"}</strong></p>
+                              </article>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="recommended-products-empty">
+                            Belum ada produk dengan kategori tone kulit “{analysisResult.tone}”.
+                          </p>
+                        )}
+                      </section>
+                    </>
                   )}
                   <button
                     className="scan-start-button"
